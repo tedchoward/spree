@@ -1,11 +1,11 @@
  #$:.unshift File.dirname(__FILE__) + '/../../'
 require File.dirname(__FILE__) + '/../../spec_helper'
 
-describe Gateway::Braintree do
+describe Gateway::BraintreeGW do
 
   before(:each) do
     Gateway.update_all(:active => false)
-    @gateway = Gateway::Braintree.create!(:name => "Braintree Gateway", :environment => "test", :active => true)
+    @gateway = Gateway::BraintreeGW.create!(:name => "Braintree Gateway", :environment => "test", :active => true)
 
     @gateway.set_preference(:merchant_id, "zbn5yzq9t7wmwx42" )
     @gateway.set_preference(:public_key, "ym9djwqpkxbv3xzt")
@@ -175,14 +175,14 @@ describe Gateway::Braintree do
   end
 
   def with_payment_profiles_off(&block)
-    Gateway::Braintree.class_eval do
+    Gateway::BraintreeGW.class_eval do
       def payment_profiles_supported?
         false
       end
     end
     yield
   ensure
-    Gateway::Braintree.class_eval do
+    Gateway::BraintreeGW.class_eval do
       def payment_profiles_supported?
         true
       end

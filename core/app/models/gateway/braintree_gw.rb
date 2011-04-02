@@ -1,4 +1,4 @@
-class Gateway::Braintree < Gateway
+class Gateway::BraintreeGW < Gateway
 	preference :merchant_id, :string
 	preference :public_key, :string
 	preference :private_key, :string
