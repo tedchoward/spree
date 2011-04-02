@@ -1,5 +1,4 @@
 class PromotionCredit < ::Adjustment
-  belongs_to :order
   scope :with_order, :conditions => "order_id IS NOT NULL"
 
   def calculate_adjustment
@@ -23,7 +22,7 @@ class PromotionCredit < ::Adjustment
     amount = order.item_total if amount > order.item_total
     -1 * amount
   end
-  
+
   def total
     map(&:amount).sum
   end

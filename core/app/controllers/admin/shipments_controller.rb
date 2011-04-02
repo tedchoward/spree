@@ -26,8 +26,11 @@ class Admin::ShipmentsController < Admin::BaseController
   destroy.success.wants.js { render_js_for_destroy }
 
   def fire
-    @shipment.send("#{params[:e]}!")
-    flash.notice = t('shipment_updated')
+    if @shipment.send("#{params[:e]}")
+      flash.notice = t('shipment_updated')
+    else
+      flash[:error] = t('cannot_perform_operation')
+    end
     redirect_to :back
   end
 
@@ -43,12 +46,7 @@ class Admin::ShipmentsController < Admin::BaseController
 
   def load_data
     load_object
-    @selected_country_id ||= @order.bill_address.country_id unless @order.nil? || @order.bill_address.nil?
-    @selected_country_id ||= Spree::Config[:default_country_id]
     @shipping_methods = ShippingMethod.all_available(@order, :back_end)
-
-    @states = State.find_all_by_country_id(@selected_country_id, :order => 'name')
-    @countries = available_countries
   end
 
   def edit_before # copy into instance variable before editing

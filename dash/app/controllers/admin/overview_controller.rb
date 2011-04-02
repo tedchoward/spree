@@ -30,7 +30,7 @@ class Admin::OverviewController < Admin::BaseController
       when "7_days" then {:from => (Time.new().to_date - 1.week).to_s(:db)}
       when "14_days" then {:from => (Time.new().to_date - 2.week).to_s(:db)}
       when "this_month" then {:from => Date.new(Time.now.year, Time.now.month, 1).to_s(:db), :to => Date.new(Time.now.year, Time.now.month, -1).to_s(:db)}
-      when "last_month" then {:from => Date.new(Time.now.year, Time.now.month - 1, 1).to_s(:db), :to => Date.new(Time.now.year, Time.now.month - 1, -1).to_s(:db)}
+      when "last_month" then {:from => (Date.new(Time.now.year, Time.now.month, 1) - 1.month).to_s(:db), :to => (Date.new(Time.now.year, Time.now.month, -1) - 1.month).to_s(:db)}
       when "this_year" then {:from => Date.new(Time.now.year, 1, 1).to_s(:db)}
       when "last_year" then {:from => Date.new(Time.now.year - 1, 1, 1).to_s(:db), :to => Date.new(Time.now.year - 1, 12, -1).to_s(:db)}
     end
@@ -70,12 +70,12 @@ class Admin::OverviewController < Admin::BaseController
   def orders_by_day(params)
 
     if params[:value] == "Count"
-      orders = Order.find(:all, :select => 'created_at', :conditions => conditions(params))
+      orders = Order.select(:created_at).where(conditions(params))
       orders = orders.group_by { |o| o.created_at.to_date }
       fill_empty_entries(orders, params)
       orders.keys.sort.map {|key| [key.strftime('%Y-%m-%d'), orders[key].size ]}
     else
-      orders = Order.find(:all, :select => 'total, created_at', :conditions => conditions(params))
+      orders = Order.select([:created_at, :total]).where(conditions(params))
       orders = orders.group_by { |o| o.created_at.to_date }
       fill_empty_entries(orders, params)
       orders.keys.sort.map {|key| [key.strftime('%Y-%m-%d'), orders[key].inject(0){|s,o| s += o.total} ]}
@@ -126,7 +126,7 @@ class Admin::OverviewController < Admin::BaseController
   end
 
   def last_five_orders
-    orders = Order.find(:all, :order => "completed_at DESC", :limit => 5, :include => :line_items, :conditions => "completed_at is not null")
+    orders = Order.includes(:line_items).where("completed_at IS NOT NULL").order("completed_at DESC").limit(5)
     orders.map do |o|
       qty = o.line_items.inject(0) {|sum,li| sum + li.quantity}
 
@@ -148,6 +148,6 @@ class Admin::OverviewController < Admin::BaseController
   end
 
   def out_of_stock_products
-    Product.find(:all, :conditions => {:count_on_hand => 0}, :limit => 5)
+    Product.where(:count_on_hand => 0).limit(5)
   end
 end

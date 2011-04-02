@@ -1,6 +1,11 @@
-require 'spec_helper'
+require File.dirname(__FILE__) + '/../spec_helper'
 
 describe Shipment do
+
+  context 'validations' do
+    it { should have_valid_factory(:shipment) }
+  end
+
   let(:order) { mock_model Order, :backordered? => false }
   let(:shipping_method) { mock_model ShippingMethod, :calculator => mock('calculator') }
   let(:shipment) { Shipment.new :order => order, :state => 'pending', :shipping_method => shipping_method }
@@ -84,7 +89,7 @@ describe Shipment do
     after { Spree::Config.set :track_inventory_levels => true }
 
     it "should not use the line items from order when track_inventory_levels is false" do
-      line_items = [mock_model LineItem]
+      line_items = [mock_model(LineItem)]
       order.stub :complete? => true
       order.stub :line_items => line_items
       shipment.line_items.should == line_items

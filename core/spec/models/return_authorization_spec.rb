@@ -1,6 +1,11 @@
-require 'spec_helper'
+require File.dirname(__FILE__) + '/../spec_helper'
 
 describe ReturnAuthorization do
+
+  context 'validation' do
+    it  { should have_valid_factory(:return_authorization) }
+  end
+
   let(:inventory_unit) { InventoryUnit.create(:variant => mock_model(Variant)) }
   let(:order) { mock_model(Order, :inventory_units => [inventory_unit], :awaiting_return? => false) }
   let(:return_authorization) { ReturnAuthorization.new(:order => order) }
@@ -87,6 +92,21 @@ describe ReturnAuthorization do
     it "should update order state" do
       order.should_receive :update!
       return_authorization.receive!
+    end
+  end
+
+  context "force_positive_amount" do
+    it "should ensure the amount is always positive" do
+      return_authorization.amount = -10
+      return_authorization.send :force_positive_amount
+      return_authorization.amount.should == 10
+    end
+  end
+
+  context "after_save" do
+    it "should run correct callbacks" do
+      return_authorization.should_receive(:force_positive_amount)
+      return_authorization.run_callbacks(:save, :after)
     end
   end
 

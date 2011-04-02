@@ -18,12 +18,14 @@
       <tr id="none">
         <td colspan="3"><%= @option_type.option_values.empty? ? t("none") : "" %></td>
       </tr>
-      <% f.fields_for :option_values do |option_value_form| %>
+      <%= f.fields_for :option_values do |option_value_form| %>
         <%= render "option_value_fields", :f => option_value_form %>
       <% end %>
     </tbody>
   </table>
-  <%= link_to_add_fields t("add_option_value"), "tbody#option_values", f, :option_values %>
+  <span id='new_add_option_value'>
+    <%= link_to_add_fields t("add_option_value"), "tbody#option_values", f, :option_values %>
+  </span>
 
   <%= render :partial => 'admin/shared/edit_resource_links' %>
 </fieldset>

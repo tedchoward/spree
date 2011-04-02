@@ -10,12 +10,10 @@ class Creditcard < ActiveRecord::Base
   validates :verification_value, :presence => true, :unless => :has_payment_profile?, :on => :create
 
   def process!(payment)
-    begin
-      if Spree::Config[:auto_capture]
-        purchase(payment.amount.to_f, payment)
-      else
-        authorize(payment.amount.to_f, payment)
-      end
+    if Spree::Config[:auto_capture]
+      purchase(payment.amount.to_f, payment)
+    else
+      authorize(payment.amount.to_f, payment)
     end
   end
 
@@ -30,19 +28,19 @@ class Creditcard < ActiveRecord::Base
   end
 
   def first_name?
-    !self.first_name.blank?
+    first_name.present?
   end
 
   def last_name?
-    !self.last_name.blank?
+    last_name.present?
   end
 
   def name
-    "#{self.first_name} #{self.last_name}"
+    "#{first_name} #{last_name}"
   end
 
   def verification_value?
-    !verification_value.blank?
+    verification_value.present?
   end
 
   # Show the card number, with all but last 4 numbers replace with "X". (XXXX-XXXX-XXXX-4338)
@@ -63,6 +61,9 @@ class Creditcard < ActiveRecord::Base
 
   def authorize(amount, payment)
     # ActiveMerchant is configured to use cents so we need to multiply order total by 100
+    payment_gateway = payment.payment_method
+    check_environment(payment_gateway)
+
     response = payment_gateway.authorize((amount * 100).round, self, gateway_options(payment))
     record_log payment, response
 
@@ -74,12 +75,15 @@ class Creditcard < ActiveRecord::Base
       payment.fail
       gateway_error(response)
     end
-  rescue ActiveMerchant::ConnectionError => e
+  rescue ActiveMerchant::ConnectionError
     gateway_error I18n.t(:unable_to_connect_to_gateway)
   end
 
   def purchase(amount, payment)
     #combined Authorize and Capture that gets processed by the ActiveMerchant gateway as one single transaction.
+    payment_gateway = payment.payment_method
+    check_environment(payment_gateway)
+
     response = payment_gateway.purchase((amount * 100).round, self, gateway_options(payment))
     record_log payment, response
 
@@ -91,12 +95,15 @@ class Creditcard < ActiveRecord::Base
       payment.fail
       gateway_error(response) unless response.success?
     end
-  rescue ActiveMerchant::ConnectionError => e
+  rescue ActiveMerchant::ConnectionError
     gateway_error t(:unable_to_connect_to_gateway)
   end
 
   def capture(payment)
     return unless payment.pending?
+    payment_gateway = payment.payment_method
+    check_environment(payment_gateway)
+
     if payment_gateway.payment_profiles_supported?
       # Gateways supporting payment profiles will need access to creditcard object because this stores the payment profile information
       # so supply the authorization itself as well as the creditcard, rather than just the authorization code
@@ -115,12 +122,15 @@ class Creditcard < ActiveRecord::Base
       payment.fail
       gateway_error(response)
     end
-  rescue ActiveMerchant::ConnectionError => e
+  rescue ActiveMerchant::ConnectionError
     gateway_error I18n.t(:unable_to_connect_to_gateway)
   end
 
   def void(payment)
-    response = payment_gateway.void(payment.response_code, self, minimal_gateway_options(payment))
+    payment_gateway = payment.payment_method
+    check_environment(payment_gateway)
+
+    response = payment_gateway.void(payment.response_code, minimal_gateway_options(payment))
     record_log payment, response
 
     if response.success?
@@ -129,12 +139,15 @@ class Creditcard < ActiveRecord::Base
     else
       gateway_error(response)
     end
-  rescue ActiveMerchant::ConnectionError => e
+  rescue ActiveMerchant::ConnectionError
     gateway_error I18n.t(:unable_to_connect_to_gateway)
   end
 
   def credit(payment)
-    amount = payment.credit_allowed >= payment.order.outstanding_balance.abs ? payment.order.outstanding_balance : payment.credit_allowed
+    payment_gateway = payment.payment_method
+    check_environment(payment_gateway)
+
+    amount = payment.credit_allowed >= payment.order.outstanding_balance.abs ? payment.order.outstanding_balance.abs : payment.credit_allowed.abs
 
     if payment_gateway.payment_profiles_supported?
       response = payment_gateway.credit((amount * 100).round, self, payment.response_code, minimal_gateway_options(payment))
@@ -154,12 +167,9 @@ class Creditcard < ActiveRecord::Base
     else
       gateway_error(response)
     end
-  rescue ActiveMerchant::ConnectionError => e
+  rescue ActiveMerchant::ConnectionError
     gateway_error I18n.t(:unable_to_connect_to_gateway)
   end
-
-
-
 
   def actions
     %w{capture void credit}
@@ -170,20 +180,14 @@ class Creditcard < ActiveRecord::Base
     payment.state == "pending"
   end
 
-  # Indicates whether its possible to void the payment.  Most gateways require that the payment has not been
-  # settled yet when performing a void (which generally happens within 12-24 hours of the transaction.)  For
-  # this reason, the default behavior of Spree is to only allow void operations within the first 12 hours of
-  # the payment creation time.
+  # Indicates whether its possible to void the payment.
   def can_void?(payment)
-    return false unless (Time.now - 12.hours) < payment.created_at
-    %w{completed pending}.include? payment.state
+    payment.state == "void" ? false : true
   end
 
-  # Indicates whether its possible to credit the payment.  Most gateways require that the payment be settled
-  # first which generally happens within 12-24 hours of the transaction.  For this reason, the default
-  # behavior of Spree is to disallow credit operations until the payment is at least 12 hours old.
+  # Indicates whether its possible to credit the payment.  Note that most gateways require that the
+  # payment be settled first which generally happens within 12-24 hours of the transaction.
   def can_credit?(payment)
-    return false unless (Time.now - 12.hours) > payment.created_at
     return false unless payment.state == "completed"
     return false unless payment.order.payment_state == "credit_owed"
     payment.credit_allowed > 0
@@ -239,8 +243,11 @@ class Creditcard < ActiveRecord::Base
     self.class.type?(number)
   end
 
-  def payment_gateway
-    @payment_gateway ||= Gateway.current
+  # Saftey check to make sure we're not accidentally performing operations on a live gateway.
+  # Ex. When testing in staging environment with a copy of production data.
+  def check_environment(gateway)
+    return if gateway.environment == Rails.env
+    message = I18n.t(:gateway_config_unavailable) + " - #{Rails.env}"
+    raise Spree::GatewayError.new(message)
   end
-
 end

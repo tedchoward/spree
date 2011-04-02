@@ -4,17 +4,19 @@ class TaxonsController < Spree::BaseController
   resource_controller
   actions :show
   helper :products
+  rescue_from ActiveRecord::RecordNotFound, :with => :render_404
 
   private
   def load_data
     @taxon ||= object
+    render_404 and return if @taxon.nil?
     params[:taxon] = @taxon.id
     @searcher = Spree::Config.searcher_class.new(params)
     @products = @searcher.retrieve_products
   end
 
   def object
-    @object ||= end_of_association_chain.find_by_permalink(params[:id] + "/")
+    @object ||= end_of_association_chain.find_by_permalink(params[:id])
   end
 
   def accurate_title

@@ -35,6 +35,17 @@ class Admin::VariantsController < Admin::BaseController
       format.js  { render_js_for_destroy }
     end
   end
+  
+  def update_positions
+    params[:positions].each do |id, index|
+      Variant.update_all(['position=?', index], ['id=?', id])
+    end
+    
+    respond_to do |format|
+      format.html { redirect_to admin_product_variants_url(params[:product_id]) }
+      format.js  { render :text => 'Ok' }
+    end
+  end
 
   private
   def create_before
@@ -47,9 +58,9 @@ class Admin::VariantsController < Admin::BaseController
     @deleted =  (params.key?(:deleted)  && params[:deleted] == "on") ? "checked" : ""
 
     if @deleted.blank?
-      @collection ||= end_of_association_chain.active.find(:all)
+      @collection ||= end_of_association_chain
     else
-      @collection ||= end_of_association_chain.deleted.find(:all)
+      @collection ||= Variant.where(:product_id => @product.id).deleted
     end
   end
 end

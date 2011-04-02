@@ -12,7 +12,7 @@ class Admin::OrdersController < Admin::BaseController
       if !@order.line_items.empty?
         unless @order.complete?
 
-          if params[:order].key?(:use_billing)
+          if params[:order].key?(:email)
             @order.shipping_method = @order.available_shipping_methods(:front_end).first
             @order.create_shipment!
             redirect_to edit_admin_order_shipment_path(@order, @order.shipment)
@@ -37,10 +37,11 @@ class Admin::OrdersController < Admin::BaseController
     # TODO - possible security check here but right now any admin can before any transition (and the state machine
     # itself will make sure transitions are not applied in the wrong state)
     event = params[:e]
-    Order.transaction do
-      @order.send("#{event}!")
+    if @order.send("#{event}")
+      flash.notice = t('order_updated')
+    else
+      flash[:error] = t('cannot_perform_operation')
     end
-    flash.notice = t('order_updated')
   rescue Spree::GatewayError => ge
     flash[:error] = "#{ge.message}"
   ensure
@@ -67,26 +68,26 @@ class Admin::OrdersController < Admin::BaseController
 
   def collection
     params[:search] ||= {}
+    @show_only_completed = params[:search][:completed_at_is_not_null].present?
+    params[:search][:meta_sort] ||= @show_only_completed ? 'completed_at.desc' : 'created_at.desc'
+    
+    @search = Order.metasearch(params[:search])
+    
     if !params[:search][:created_at_greater_than].blank?
       params[:search][:created_at_greater_than] = Time.zone.parse(params[:search][:created_at_greater_than]).beginning_of_day rescue ""
     end
-
+   
     if !params[:search][:created_at_less_than].blank?
       params[:search][:created_at_less_than] = Time.zone.parse(params[:search][:created_at_less_than]).end_of_day rescue ""
     end
 
-    params[:search][:completed_at_not_null] ||= "1"
-    if params[:search].delete(:completed_at_not_null) == "1"
-      params[:search][:completed_at_not_null] = true
+    if @show_only_completed
+      params[:search][:completed_at_greater_than] = params[:search].delete(:created_at_greater_than)
+      params[:search][:completed_at_less_than] = params[:search].delete(:created_at_less_than)
     end
-
-    params[:search][:order] ||= "descend_by_created_at"
-    @search = Order.searchlogic(params[:search])
-
-    # QUERY - get per_page from form ever???  maybe push into model
-    # @search.per_page ||= Spree::Config[:orders_per_page]
-
-    @collection = @search.do_search.paginate(:include  => [:user, :shipments, :payments],
+    
+    @collection = Order.metasearch(params[:search]).paginate(
+                                   :include  => [:user, :shipments, :payments],
                                    :per_page => Spree::Config[:orders_per_page],
                                    :page     => params[:page])
   end

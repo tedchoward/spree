@@ -5,7 +5,7 @@
 class Ability
   include CanCan::Ability
 
-  class_inheritable_accessor :abilities
+  class_attribute :abilities
   self.abilities = Set.new
 
   # Allows us to go beyond the standard cancan initialize method which makes it difficult for engines to
@@ -38,11 +38,11 @@ class Ability
       end
       can :create, User
       #############################
-      can :read, Order do |order|
-        order.user == user
+      can :read, Order do |order, token|
+        order.user == user || order.token && token == order.token
       end
-      can :update, Order do |order|
-        order.user == user
+      can :update, Order do |order, token|
+        order.user == user || order.token && token == order.token
       end
       can :create, Order
       #############################
@@ -57,7 +57,7 @@ class Ability
     #include any abilities registered by extensions, etc.
     Ability.abilities.each do |clazz|
       ability = clazz.send(:new, user)
-      @can_definitions = can_definitions + ability.send(:can_definitions)
+      @rules = rules + ability.send(:rules)
     end
 
   end

@@ -2,10 +2,44 @@ require File.dirname(__FILE__) + '/../spec_helper'
 
 describe Order do
 
+  context 'validation' do
+    it { should have_valid_factory(:order) }
+  end
+
   let(:order) { Order.new }
   let(:gateway) { Gateway::Bogus.new(:name => "Credit Card", :active => true) }
 
-  before { Gateway.stub :current => gateway }
+  before do
+    Gateway.stub :current => gateway
+    User.stub(:current => mock_model(User, :id => 123))
+  end
+
+  context "factory" do
+    it "should change the Orders count by 1 after factory has been executed" do
+      lambda do
+        Factory(:order_with_totals)
+      end.should change(Order, :count).by(1)
+    end
+    context 'line_item' do
+      let(:order) { Factory(:order_with_totals) }
+      it "should have a line_item attached to it" do
+        order.line_items.size.should == 1
+      end
+      it "should be attached to last line_item created " do
+        order.line_items.first.id.should == LineItem.last.id
+      end
+    end
+  end
+
+  context "#products" do
+    it "should return ordered products" do
+      variant1 = mock_model(Variant, :product => "product1")
+      variant2 = mock_model(Variant, :product => "product2")
+      line_items = [mock_model(LineItem, :variant => variant1), mock_model(LineItem, :variant => variant2)]
+      order.stub(:line_items => line_items)
+      order.products.should == ['product1', 'product2']
+    end
+  end
 
   context "#save" do
     it "should create guest user (when no user assigned)" do
@@ -14,7 +48,7 @@ describe Order do
     end
 
     context "when associated with a registered user" do
-      let(:user) { mock_model(User, :email => "user@registered.com") }
+      let(:user) { mock_model(User, :email => "user@registered.com", :anonymous? => false) }
       before { order.user = user }
 
       it "should not remove the user" do
@@ -26,6 +60,19 @@ describe Order do
         order.save
         order.email.should == user.email
       end
+
+      it "should accept the sample admin email address" do
+        user.stub :email => "spree@example.com"
+        order.save
+        order.email.should == user.email
+      end
+
+      it "should reject the automatic email for anonymous users" do
+        user.stub :anonymous? => true
+        order.save
+        order.email.should be_blank
+      end
+
     end
 
     it "should destroy any line_items with zero quantity"
@@ -74,7 +121,7 @@ describe Order do
 
       before do
         order.state = "address"
-        TaxRate.stub :match => rate
+        TaxRate.stub :match => [rate]
       end
 
       it "should create a tax charge when transitioning to delivery state" do
@@ -86,20 +133,14 @@ describe Order do
         let(:old_charge) { mock_model Adjustment }
         before { order.stub_chain :adjustments, :tax => [old_charge] }
 
-        it "should not create a second tax charge (for the same rate)" do
-          old_charge.stub :originator => rate
-          rate.should_not_receive :create_adjustment
-          order.next!
-        end
-
         it "should remove an existing tax charge (for the old rate)" do
-          old_charge.stub :originator => mock_model(TaxRate)
+          rate.should_receive(:create_adjustment).with(I18n.t(:tax), order, order, true)
           old_charge.should_receive :destroy
           order.next
         end
 
         it "should remove an existing tax charge if there is no longer a relevant tax rate" do
-          TaxRate.stub :match => nil
+          TaxRate.stub :match => []
           old_charge.stub :originator => mock_model(TaxRate)
           old_charge.should_receive :destroy
           order.next
@@ -110,25 +151,18 @@ describe Order do
 
 
     context "when current state is delivery" do
-      let(:shipping_method) { mock_model(ShippingMethod).as_null_object }
-      let(:units) { [mock_model(InventoryUnit)] }
-
       before do
-        Shipment.stub(:create).and_return(mock_model(Shipment).as_null_object)
         order.state = "delivery"
-        order.stub :shipping_method => shipping_method
-        order.stub :inventory_units => units
+        order.shipping_method = mock_model(ShippingMethod).as_null_object
       end
+
       context "when transitioning to payment state" do
-        before do
-        end
         it "should create a shipment" do
-          Shipment.should_receive(:create).with(:shipping_method => order.shipping_method, :order => order, :address => order.ship_address)
           order.next!
+          order.shipments.size.should == 1
         end
       end
     end
-
 
   end
 
@@ -177,6 +211,11 @@ describe Order do
       adjustment = mock_model(Adjustment)
       order.stub_chain :adjustments, :optional => [adjustment]
       adjustment.should_receive(:update_attribute).with("locked", true)
+      order.finalize!
+    end
+
+    it "should log state event" do
+      order.state_events.should_receive(:create)
       order.finalize!
     end
   end
@@ -261,7 +300,7 @@ describe Order do
     end
 
     context "when payments are insufficient" do
-      let(:payments) { mock "payments", :completed => [] }
+      let(:payments) { mock "payments", :completed => [], :first => mock_model(Payment, :checkout? => false) }
       before { order.stub :total => 100, :payment_total => 50, :payments => payments }
 
       context "when last payment did not fail" do
@@ -290,42 +329,42 @@ describe Order do
     end
 
     context "when there are shipments" do
+      let(:shipments) { [mock_model(Shipment, :update! => nil), mock_model(Shipment, :update! => nil)] }
       before do
-        order.stub_chain :shipments, :count => 2
-        order.shipments.stub_chain(:shipped, :count => 0)
-        order.shipments.stub_chain(:ready, :count => 0)
-        order.shipments.stub_chain(:pending, :count => 0)
-        order.shipments.stub :each => nil
+        shipments.stub :shipped => []
+        shipments.stub :ready => []
+        shipments.stub :pending => []
+        order.stub :shipments => shipments
       end
 
       it "should set the correct shipment_state (when all shipments are shipped)" do
-        order.shipments.stub_chain(:shipped, :count => 2)
+        shipments.stub :shipped => [mock_model(Shipment), mock_model(Shipment)]
         order.update!
         order.shipment_state.should == "shipped"
       end
 
       it "should set the correct shipment_state (when some units are backordered)" do
-        order.shipments.stub_chain(:shipped, :count => 1)
+        shipments.stub :shipped => [mock_model(Shipment)]
         order.stub(:backordered?).and_return true
         order.update!
         order.shipment_state.should == "backorder"
       end
 
       it "should set the shipment_state to partial (when some of the shipments have shipped)" do
-        order.shipments.stub_chain(:shipped, :count => 1)
-        order.shipments.stub_chain(:ready, :count => 1)
+        shipments.stub :shipped => [mock_model(Shipment)]
+        shipments.stub :ready => [mock_model(Shipment)]
         order.update!
         order.shipment_state.should == "partial"
       end
 
       it "should set the correct shipment_state (when some of the shipments are ready)" do
-        order.shipments.stub_chain(:ready, :count => 2)
+        shipments.stub :ready => [mock_model(Shipment), mock_model(Shipment)]
         order.update!
         order.shipment_state.should == "ready"
       end
 
       it "should set the shipment_state to pending (when all shipments are pending)" do
-        order.shipments.stub_chain(:pending, :count => 2)
+        shipments.stub :pending => [mock_model(Shipment), mock_model(Shipment)]
         order.update!
         order.shipment_state.should == "pending"
       end
@@ -336,6 +375,15 @@ describe Order do
       after { Order.update_hooks.clear }
       it "should call each of the update hooks" do
         order.should_receive :foo
+        order.update!
+      end
+    end
+
+    context "when there is a single checkout payment" do
+      before { order.stub(:payment => mock_model(Payment, :checkout? => true, :amount => 11), :total => 22) }
+
+      it "should update the payment amount to order total" do
+        order.payment.should_receive(:update_attributes_without_callbacks).with(:amount => order.total)
         order.update!
       end
     end
@@ -390,8 +438,9 @@ describe Order do
       order.item_total.should == 150
     end
     it "should set payments_total to the sum of completed payment amounts" do
-      payments = [ mock_model(Payment, :amount => 100), mock_model(Payment, :amount => -10) ]
-      order.stub_chain(:payments, :completed => payments)
+      payments = [ mock_model(Payment, :amount => 100, :checkout? => false), mock_model(Payment, :amount => -10, :checkout? => false) ]
+      payments.stub(:completed => payments)
+      order.stub(:payments => payments)
       order.update!
       order.payment_total.should == 90
     end
@@ -447,7 +496,7 @@ describe Order do
 
   context "#can_cancel?" do
 
-    [PENDING, BACKORDER, READY].each do |shipment_state|
+    %w(pending backorder ready).each do |shipment_state|
       it "should be true if shipment_state is #{shipment_state}" do
         order.stub :completed? => true
         order.shipment_state = shipment_state
@@ -455,7 +504,7 @@ describe Order do
       end
     end
 
-    (SHIPMENT_STATES - [PENDING, BACKORDER, READY]).each do |shipment_state|
+    (SHIPMENT_STATES - %w(pending backorder ready)).each do |shipment_state|
       it "should be false if shipment_state is #{shipment_state}" do
         order.stub :completed? => true
         order.shipment_state = shipment_state
@@ -497,6 +546,37 @@ describe Order do
         order.tax_total.should == 15
       end
     end
+  end
+
+  context "#can_cancel?" do
+    it "should be false for completed order in the canceled state" do
+      order.state = 'canceled'
+      order.shipment_state = 'ready'
+      order.completed_at = Time.now
+      order.can_cancel?.should be_false
+    end
+  end
+
+  context "rate_hash" do
+    let(:shipping_method_1) { mock_model ShippingMethod, :name => 'Air Shipping', :id => 1, :calculator => mock('calculator') }
+    let(:shipping_method_2) { mock_model ShippingMethod, :name => 'Ground Shipping', :id => 2, :calculator => mock('calculator') }
+
+    before do
+      shipping_method_1.calculator.stub(:compute).and_return(10.0)
+      shipping_method_2.calculator.stub(:compute).and_return(0.0)
+      order.stub(:available_shipping_methods => [ shipping_method_1, shipping_method_2 ])
+    end
+
+    it "should return shipping methods sorted by cost" do
+      order.rate_hash.should == [{:shipping_method => shipping_method_2, :cost => 0.0, :name => "Ground Shipping", :id => 2},
+                                  {:shipping_method => shipping_method_1, :cost => 10.0, :name => "Air Shipping", :id => 1}]
+    end
+
+    it "should not return shipping methods with nil cost" do
+      shipping_method_1.calculator.stub(:compute).and_return(nil)
+      order.rate_hash.should == [{:shipping_method => shipping_method_2, :cost => 0.0, :name => "Ground Shipping", :id => 2}]
+    end
+
   end
 
 end

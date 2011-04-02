@@ -1,5 +1,5 @@
 Order.class_eval do
-  delegate :token, :to => :user
+  token_resource
 
   # Associates the specified user with the order and destroys any previous association with guest user if
   # necessary.
@@ -10,6 +10,7 @@ Order.class_eval do
     save(:validate => false)
   end
 
-  validates_format_of :email, :with => Authlogic::Regex.email, :if => :require_email
-
+  # TODO: validate the format of the email as well (but we can't rely on authlogic anymore to help with validation)
+  validates_presence_of :email, :if => :require_email
+  validates_format_of :email, :with => /^([\w\.%\+\-]+)@([\w\-]+\.)+([\w]{2,})$/i, :if => :require_email
 end

@@ -1,9 +1,14 @@
 module Spree
   module CurrentOrder
 
-    # This should be overridden by an auth-related extension which would then have the opporutnity to associate the new order with the
-    # current user before saving.
+    # This should be overridden by an auth-related extension which would then have the
+    # opportunity to associate the new order with the # current user before saving.
     def before_save_new_order
+    end
+
+    # This should be overridden by an auth-related extension which would then have the
+    # opporutnity to store tokens, etc. in the session # after saving.
+    def after_save_new_order
     end
 
     # The current incomplete order from the session for use in cart and during checkout
@@ -14,6 +19,7 @@ module Spree
         @current_order = Order.new
         before_save_new_order
         @current_order.save!
+        after_save_new_order
       end
       session[:order_id] = @current_order ? @current_order.id : nil
       @current_order

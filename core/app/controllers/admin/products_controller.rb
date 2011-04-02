@@ -73,32 +73,37 @@ class Admin::ProductsController < Admin::BaseController
   end
 
   def load_data
-    @tax_categories = TaxCategory.find(:all, :order=>"name")
-    @shipping_categories = ShippingCategory.find(:all, :order=>"name")
+    @tax_categories = TaxCategory.order(:name)
+    @shipping_categories = ShippingCategory.order(:name)
   end
 
   def collection
     return @collection if @collection.present?
-    base_scope = end_of_association_chain
 
     unless request.xhr?
-      # Note: the SL scopes are on/off switches, so we need to select "not_deleted" explicitly if the switch is off
-      # QUERY - better as named scope or as SL scope?
-      if params[:search].nil? || params[:search][:deleted_at_not_null].blank?
-        base_scope = base_scope.not_deleted
+      params[:search] ||= {}
+      # Note: the MetaSearch scopes are on/off switches, so we need to select "not_deleted" explicitly if the switch is off
+      if params[:search][:deleted_at_is_null].nil?
+        params[:search][:deleted_at_is_null] = "1"
       end
 
-      @search = base_scope.group_by_products_id.searchlogic(params[:search])
-      @search.order ||= "ascend_by_name"
+      params[:search][:meta_sort] ||= "name.asc"
+      @search = end_of_association_chain.metasearch(params[:search])
 
-      @collection = @search.do_search.paginate(:include   => {:variants => [:images, :option_values]},
-                                     :per_page  => Spree::Config[:admin_products_per_page],
-                                     :page      => params[:page])
+      pagination_options = {:include   => {:variants => [:images, :option_values]},
+                            :per_page  => Spree::Config[:admin_products_per_page],
+                            :page      => params[:page]}
+
+      @collection = @search.relation.group_by_products_id.paginate(pagination_options)
     else
       includes = [{:variants => [:images,  {:option_values => :option_type}]}, :master, :images]
 
-      @collection = base_scope.where(["name LIKE ?", "%#{params[:q]}%"]).includes(includes).limit(params[:limit] || 10)
-      @collection.concat base_scope.where(["variants.sku LIKE ?", "%#{params[:q]}%"]).includes(:variants_including_master).limit(params[:limit] || 10)
+      @collection = end_of_association_chain.where(["name LIKE ?", "%#{params[:q]}%"])
+      @collection = @collection.includes(includes).limit(params[:limit] || 10)
+
+      tmp = end_of_association_chain.where(["variants.sku LIKE ?", "%#{params[:q]}%"])
+      tmp = tmp.includes(:variants_including_master).limit(params[:limit] || 10)
+      @collection.concat(tmp)
 
       @collection.uniq
     end

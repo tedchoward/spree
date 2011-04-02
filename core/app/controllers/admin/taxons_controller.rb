@@ -24,11 +24,10 @@ class Admin::TaxonsController < Admin::BaseController
     if params[:q].blank?
       @available_taxons = []
     else
-      @available_taxons = Taxon.find(:all, :conditions => ['lower(name) LIKE ?', "%#{params[:q].downcase}%"])
+      @available_taxons = Taxon.where('lower(name) LIKE ?', "%#{params[:q].mb_chars.downcase}%")
     end
     @available_taxons.delete_if { |taxon| @product.taxons.include?(taxon) }
     respond_to do |format|
-      format.html
       format.js {render :layout => false}
     end
 
@@ -38,13 +37,13 @@ class Admin::TaxonsController < Admin::BaseController
     @product.taxons.delete(@taxon)
     @product.save
     @taxons = @product.taxons
-    render :layout => false
+    render_js_for_destroy
   end
 
   def select
     @product = Product.find_by_param!(params[:product_id])
-    taxon = Taxon.find(params[:id])
-    @product.taxons << taxon
+    @taxon = Taxon.find(params[:id])
+    @product.taxons << @taxon
     @product.save
     @taxons = @product.taxons
     render :layout => false
@@ -111,13 +110,6 @@ class Admin::TaxonsController < Admin::BaseController
         taxon.set_permalink
         taxon.save!
       end
-    end
-  end
-
-  def reposition_taxons(taxons)
-    taxons.each_with_index do |taxon, i|
-      taxon.position = i
-      taxon.save!
     end
   end
 

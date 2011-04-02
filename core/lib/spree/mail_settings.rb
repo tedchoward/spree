@@ -1,7 +1,8 @@
 module Spree
   module MailSettings
 
-    # Override the Rails application mail settings based on preference.  This makes it possible to configure the mail settings
+    # Override the Rails application mail settings based on preference.
+    # This makes it possible to configure the mail settings
     # through an admin interface instead of requiring changes to the Rails envrionment file.
     def self.init
       return unless mail_method = MailMethod.current
@@ -18,12 +19,10 @@ module Spree
           mail_server_settings[:password] = mail_method.preferred_smtp_password
         end
 
+        mail_server_settings[:enable_starttls_auto] = (mail_method.preferred_secure_connection_type == 'TLS')
+
         ActionMailer::Base.smtp_settings = mail_server_settings
         ActionMailer::Base.perform_deliveries = true
-
-        if mail_method.preferred_secure_connection_type == 'TLS'
-          mail_server_settings[:enable_starttls_auto] = true
-        end
       else
         #logger.warn "NOTICE: Mail not enabled"
         ActionMailer::Base.perform_deliveries = false

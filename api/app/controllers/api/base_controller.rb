@@ -2,30 +2,30 @@ class Api::BaseController < Spree::BaseController
 
   def self.resource_controller_for_api
     resource_controller
+    before_filter :check_http_authorization
     skip_before_filter :verify_authenticity_token, :if => lambda { admin_token_passed_in_headers }
 
-    index.response do |wants|
+    index do
       wants.json { render :json => collection.to_json(collection_serialization_options) }
     end
 
-    show.response do |wants|
+    show do
       wants.json { render :json => object.to_json(object_serialization_options) }
+      failure.wants.json { render :text => "Failure\n", :status => 500 }
     end
 
     create do
-      wants.json { redirect_to object_url, :status => 201 }
-      failure.wants.json { render :json => object_errors.to_json, :status => 422 }
+      wants.json { render :text => "Resource created\n", :status => 201, :location => object_url }
+      failure.wants.json { render :text => "Failure\n", :status => 500 }
     end
 
     update do
       wants.json { render :nothing => true }
-      failure.wants.json { render :json => object_errors.to_json, :status => 422 }
+      failure.wants.json { render :text => "Failure\n", :status => 500 }
     end
 
     define_method :admin_token_passed_in_headers do
-      token = request.headers['X-SpreeAPIKey']
-      return access_denied unless token
-      @current_user = User.find_by_api_key(token)
+      request.headers['HTTP_AUTHORIZATION'].present?
     end
 
     define_method :end_of_association_chain do
@@ -33,7 +33,7 @@ class Api::BaseController < Spree::BaseController
     end
 
     define_method :collection do
-      @collection ||= search.do_search.all(:limit => 100)
+      @collection ||= search.relation.limit(100)
     end
   end
 
@@ -72,8 +72,9 @@ class Api::BaseController < Spree::BaseController
 
     def search
       return @search unless @search.nil?
-      @search = end_of_association_chain.searchlogic(params[:search])
-      @search.order ||= "descend_by_created_at"
+      params[:search] = {} if params[:search].blank?
+      params[:search][:meta_sort] = 'created_at.desc' if params[:search][:meta_sort].blank?
+      @search = end_of_association_chain.metasearch(params[:search])
       @search
     end
 
@@ -92,5 +93,10 @@ class Api::BaseController < Spree::BaseController
     def object_errors
       {:errors => object.errors.full_messages}
     end
+
+  private
+  def check_http_authorization
+    render :text => "Access Denied\n", :status => 401 unless request.headers['HTTP_AUTHORIZATION'].present?
+  end
 
 end

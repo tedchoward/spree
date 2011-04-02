@@ -3,7 +3,8 @@
 <h2><%= t("new_adjustment")%></h2>
 
 <%= render "shared/error_messages", :target => @adjustment %>
-<%= form_for @adjustment, :url => collection_url do |f| %>
+
+<%= form_for @adjustment, :url => admin_order_adjustments_path do |f| %>
   <%= render :partial => "form", :locals => {:f => f} %>
 
   <p class="form-buttons">
