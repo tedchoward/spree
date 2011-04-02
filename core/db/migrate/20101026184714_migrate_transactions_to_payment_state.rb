@@ -1,7 +1,5 @@
-class Transaction < ActiveRecord::Base;
-end
-class CreditcardTxn < Transaction;
-end
+class Transaction < ActiveRecord::Base; end
+class CreditcardTxn < Transaction; end
 
 class MigrateTransactionsToPaymentState < ActiveRecord::Migration
 
@@ -29,13 +27,13 @@ class MigrateTransactionsToPaymentState < ActiveRecord::Migration
       payment = Payment.find(tx)
       order = payment.order
       order.create_payment(
-              :amount=>tx.amount,
-              :source_id=>payment.source_id, :source_type=>'Creditcard',
-              :payment_method_id=>payment.payment_method_id, :state=>PAYMENT_COMPLETE,
-              :avs_response=>tx.avs_response, :response_code=>tx.response_code
+        :amount=>tx.amount,
+        :source_id=>payment.source_id, :source_type=>'Creditcard',
+        :payment_method_id=>payment.payment_method_id, :state=>PAYMENT_COMPLETE,
+        :avs_response=>tx.avs_response, :response_code=>tx.response_code
       )
     end
-    credited.each { |rec| rec.destroy }
+    credited.each{|rec| rec.destroy }
   end
 
   def self.migrate_voided_transactions
@@ -46,7 +44,7 @@ class MigrateTransactionsToPaymentState < ActiveRecord::Migration
     unless voided.empty?
       all_but_credited = [AUTHORIZED, COMPLETED, PURCHASED, VOIDED]
       voided_and_subsequent_transactions = Transaction.find_by_sql("select * from transactions where payment_id in (#{voided.map(&:payment_id).join(',')}) and txn_type in (#{all_but_credited.join(',')})")
-      voided_and_subsequent_transactions.each { |rec| rec.destroy }
+      voided_and_subsequent_transactions.each{|rec| rec.destroy }
     end
   end
 
@@ -63,7 +61,7 @@ class MigrateTransactionsToPaymentState < ActiveRecord::Migration
     txs.each do |tx|
       update_payment(tx, PAYMENT_COMPLETE)
     end
-    txs.each { |rec| rec.destroy }
+    txs.each{|rec| rec.destroy }
   end
 
   def self.migrate_authorized_only_transactions
@@ -76,17 +74,17 @@ class MigrateTransactionsToPaymentState < ActiveRecord::Migration
     authorized_only.each do |tx|
       update_payment(tx, PAYMENT_PENDING)
     end
-    authorized_only.each { |rec| rec.destroy }
+    authorized_only.each {|rec| rec.destroy }
   end
 
   def self.update_payment(tx, state)
     payment = Payment.find(tx.payment_id)
     payment.update_attributes_without_callbacks({
-            :state => state,
-            :source_type => 'Creditcard',
-            :amount => tx.amount,
-            :response_code => tx.response_code,
-            :avs_response => tx.avs_response
+      :state => state,
+      :source_type => 'Creditcard',
+      :amount => tx.amount,
+      :response_code => tx.response_code,
+      :avs_response => tx.avs_response
     })
   end
 
