@@ -19,7 +19,6 @@ module Spree
       end
       if create_order_if_necessary and (@current_order.nil? or @current_order.completed?)
         @current_order = Order.new
-        @current_order.use_billing = true
         before_save_new_order
         @current_order.save!
         after_save_new_order
