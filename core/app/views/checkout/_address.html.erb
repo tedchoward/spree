@@ -66,7 +66,7 @@ div.inner input[type=text], div.inner select { width: 80%; }
       </p>
       <p id="bphone" class="field">
         <%= bill_form.label :phone, t(:phone) %>
-        <%= bill_form.text_field :phone, :class => 'required' %><span class="req">*</span>
+        <%= bill_form.text_field :phone %>
           </p>
           <% if Spree::Config[:alternative_billing_phone] %>
             <p id="baltphone">
