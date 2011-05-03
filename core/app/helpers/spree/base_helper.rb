@@ -4,10 +4,12 @@ module Spree::BaseHelper
     return "" if current_page?(cart_path)
     css_class = nil
     if current_order.nil? or current_order.line_items.empty?
-      text = "#{text}: (#{t('empty')})"
+      # text = "#{text}: (#{t('empty')})"
+      test = ''
       css_class = 'empty'
     else
-      text = "#{text}: (#{current_order.item_count}) #{order_price(current_order)}"
+      # text = "#{text}: (#{current_order.item_count}) #{order_price(current_order)}"
+      text = raw("<span>#{current_order.item_count}</span>")
       css_class = 'full'
     end
     link_to text, cart_path, :class => css_class
