@@ -5,7 +5,7 @@ module Spree::BaseHelper
     css_class = nil
     if current_order.nil? or current_order.line_items.empty?
       # text = "#{text}: (#{t('empty')})"
-      test = ''
+      text = ''
       css_class = 'empty'
     else
       # text = "#{text}: (#{current_order.item_count}) #{order_price(current_order)}"
