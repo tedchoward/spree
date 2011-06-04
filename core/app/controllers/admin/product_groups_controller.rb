@@ -1,28 +1,37 @@
-class Admin::ProductGroupsController < Admin::BaseController
-  resource_controller
+class Admin::ProductGroupsController < Admin::ResourceController
+  before_filter :patch_params, :only => [:update]
   
-  create.response do |wants| 
-    wants.html { redirect_to edit_object_path }
-  end
-  update.response do |wants| 
-    wants.html { redirect_to edit_object_path }
-    wants.js { render :action => 'update', :layout => false}
-  end
-
   def preview
     @product_group = ProductGroup.new(params[:product_group])
     @product_group.name = "for_preview"
-    render :partial => 'preview', :layout => false
+    respond_with(@product_group) { |format| format.html { render :partial => 'preview', :layout => false } }
   end
 
-  
+  protected
+
+    def find_resource
+      ProductGroup.find_by_permalink(params[:id])
+    end
+     
+    def location_after_save
+      edit_admin_product_group_path(@product_group)
+    end
+
+    def collection
+      params[:search] ||= {}
+      params[:search][:meta_sort] ||= "name.asc"
+      @search = super.metasearch(params[:search])
+      @collection = @search.paginate( :per_page => Spree::Config[:per_page],
+                                      :page     => params[:page])
+    end
+    
   private
 
     # Consolidate argument arrays for nested product_scope attributes
     # Necessary for product scopes with multiple arguments
-    def object_params
+    def patch_params
       if params["product_group"] and params["product_group"]["product_scopes_attributes"].is_a?(Array)
-        params["product_group"]["product_scopes_attributes"] = params["product_group"]["product_scopes_attributes"].group_by {|a| a["id"]}.map do |scope_id, attrs| 
+        params["product_group"]["product_scopes_attributes"] = params["product_group"]["product_scopes_attributes"].group_by {|a| a["id"]}.map do |scope_id, attrs|
           a = { "id" => scope_id, "arguments" => attrs.map{|a| a["arguments"] }.flatten }
           if name = attrs.first["name"]
             a["name"] = name
@@ -30,16 +39,8 @@ class Admin::ProductGroupsController < Admin::BaseController
           a
         end
       end
-      params["product_group"]
     end
 
-    def collection
-      @search = ProductGroup.searchlogic(params[:search])
 
-      @collection = @search.do_search.paginate(
-        :per_page => Spree::Config[:per_page],
-        :page     => params[:page]
-      )
-    end
 
 end

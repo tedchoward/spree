@@ -5,7 +5,7 @@ module Spree::CalculatedAdjustments
       accepts_nested_attributes_for :calculator
       validates :calculator, :presence => true if options[:require]
 
-      class_inheritable_accessor :calculators
+      class_attribute :calculators
       self.calculators = Set.new
       # @available_calculators = []
       def register_calculator(calculator)
@@ -50,7 +50,10 @@ module Spree::CalculatedAdjustments
     # By default the adjustment will not be considered mandatory
     def create_adjustment(label, target, calculable, mandatory=false)
       amount = self.calculator.compute(calculable)
-      target.adjustments.create(:amount => amount, :source => calculable, :originator => self, :label => label, :mandatory => mandatory)
+      target.adjustments.create(:amount => amount,  :source => calculable,
+                                                    :originator => self,
+                                                    :label => label,
+                                                    :mandatory => mandatory)
     end
 
     # Updates the amount of the adjustment using our Calculator and calling the +compute+ method with the +calculable+

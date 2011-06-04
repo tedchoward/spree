@@ -1,10 +1,12 @@
 class Api::ShipmentsController < Api::BaseController
-  resource_controller_for_api
-  actions :index, :show, :update, :create
-  belongs_to :order
 
   private
-
+    def parent
+      if params[:order_id]
+        @parent ||= Order.find_by_param(params[:order_id])
+      end
+    end
+    
     def collection_serialization_options
       { :include => {:shipping_method => {}, :address => {}, :inventory_units => {:include => :variant}},
       :except => [:shipping_method_id, :address_id] }
@@ -29,7 +31,7 @@ class Api::ShipmentsController < Api::BaseController
     end
 
     def eager_load_associations
-      [:shipping_method, {:shipping_charge => :order}, :address, {:inventory_units => [:variant]}]
+      [:shipping_method, :address, {:inventory_units => [:variant]}]
     end
 
 end

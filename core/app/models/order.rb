@@ -1,6 +1,7 @@
 class Order < ActiveRecord::Base
 
-  attr_accessible :line_items, :bill_address_attributes, :ship_address_attributes, :payments_attributes, :ship_address, :line_items_attributes,
+  attr_accessible :line_items, :bill_address_attributes, :ship_address_attributes, :payments_attributes,
+                  :ship_address, :line_items_attributes,
                   :shipping_method_id, :email, :use_billing, :special_instructions
 
   belongs_to :user
@@ -26,6 +27,7 @@ class Order < ActiveRecord::Base
   before_create :generate_order_number
 
   validates_presence_of :email, :if => :require_email
+  validate :has_available_shipment
 
   #delegate :ip_address, :to => :checkout
   def ip_address
@@ -33,8 +35,8 @@ class Order < ActiveRecord::Base
   end
 
   scope :by_number, lambda {|number| where("orders.number = ?", number)}
-  scope :between, lambda {|*dates| where("orders.created_at between :start and :stop").where(:start, dates.first.to_date).where(:stop, dates.last.to_date)}
-  scope :by_customer, lambda {|customer| where("uses.email =?", customer).includes(:user)}
+  scope :between, lambda {|*dates| where("orders.created_at between ? and ?", dates.first.to_date, dates.last.to_date)}
+  scope :by_customer, lambda {|customer| joins(:user).where("users.email =?", customer)}
   scope :by_state, lambda {|state| where("state = ?", state)}
   scope :complete, where("orders.completed_at IS NOT NULL")
   scope :incomplete, where("orders.completed_at IS NULL")
@@ -43,7 +45,7 @@ class Order < ActiveRecord::Base
 
   attr_accessor :out_of_stock_items
 
-  class_inheritable_accessor :update_hooks
+  class_attribute :update_hooks
   self.update_hooks = Set.new
 
   # Use this method in other gems that wish to register their own custom logic that should be called after Order#updat
@@ -75,13 +77,17 @@ class Order < ActiveRecord::Base
   state_machine :initial => 'cart', :use_transactions => false do
 
     event :next do
-      transition :from => 'cart', :to => 'address'
-      transition :from => 'address', :to => 'delivery'
+      transition :from => 'cart',     :to => 'address'
+      transition :from => 'address',  :to => 'delivery'
       transition :from => 'delivery', :to => 'payment'
-      transition :from => 'payment', :to => 'confirm'
-      transition :from => 'confirm', :to => 'complete'
+      transition :from => 'confirm',  :to => 'complete'
+
+      # note: some payment methods will not support a confirm step
+      transition :from => 'payment',  :to => 'confirm',
+                                      :if => Proc.new { Gateway.current && Gateway.current.payment_profiles_supported? }
+
+      transition :from => 'payment', :to => 'complete'
     end
-    #TODO - add conditional confirmation step (only when gateway supports it, etc.)
 
     event :cancel do
       transition :to => 'canceled', :if => :allow_cancel?
@@ -145,6 +151,11 @@ class Order < ActiveRecord::Base
       :total => total
     })
 
+    #ensure checkout payment always matches order total
+    if payment and payment.checkout? and payment.amount != total
+      payment.update_attributes_without_callbacks(:amount => total)
+    end
+
     update_hooks.each { |hook| self.send hook }
   end
 
@@ -177,7 +188,7 @@ class Order < ActiveRecord::Base
 
 
   def allow_cancel?
-    return false unless completed?
+    return false unless completed? and state != 'canceled'
     %w{ready backorder pending}.include? shipment_state
   end
 
@@ -215,13 +226,15 @@ class Order < ActiveRecord::Base
     current_item
   end
 
+  # FIXME refactor this method and implement validation using validates_* utilities
   def generate_order_number
     record = true
     while record
       random = "R#{Array.new(9){rand(9)}.join}"
-      record = Order.find(:first, :conditions => ["number = ?", random])
+      record = self.class.find(:first, :conditions => ["number = ?", random])
     end
-    self.number = random
+    self.number = random if self.number.blank?
+    self.number
   end
 
   # convenience method since many stores will not allow user to create multiple shipments
@@ -232,12 +245,6 @@ class Order < ActiveRecord::Base
   def contains?(variant)
     line_items.detect{|line_item| line_item.variant_id == variant.id}
   end
-
-  # def mark_shipped
-  #   inventory_units.each do |inventory_unit|
-  #     inventory_unit.ship!
-  #   end
-  # end
 
   def ship_total
     adjustments.shipping.map(&:amount).sum
@@ -250,12 +257,8 @@ class Order < ActiveRecord::Base
   # Creates a new tax charge if applicable.  Uses the highest possible matching rate and destroys any previous
   # tax charges if they were created by rates that no longer apply.
   def create_tax_charge!
-    return unless rate = TaxRate.match(bill_address) or adjustments.tax.present?
-    if old_charge = adjustments.tax.first
-      old_charge.destroy unless old_charge.originator == rate
-      return
-    end
-    rate.create_adjustment(I18n.t(:tax), self, self, true)
+    adjustments.tax.each {|e| e.destroy }
+    TaxRate.match(ship_address).each {|r| r.create_adjustment(I18n.t(:tax), self, self, true) }
   end
 
   # Creates a new shipment (adjustment is created by shipment model)
@@ -264,7 +267,9 @@ class Order < ActiveRecord::Base
     if shipment.present?
       shipment.update_attributes(:shipping_method => shipping_method)
     else
-      self.shipments << Shipment.create(:order => self, :shipping_method => shipping_method, :address => self.ship_address)
+      self.shipments << Shipment.create(:order => self,
+                                        :shipping_method => shipping_method,
+                                        :address => self.ship_address)
     end
 
   end
@@ -283,8 +288,9 @@ class Order < ActiveRecord::Base
   end
 
   def name
-    address = bill_address || ship_address
-    "#{address.firstname} #{address.lastname}" if address
+    if (address = bill_address || ship_address)
+      "#{address.firstname} #{address.lastname}"
+    end
   end
 
   def creditcards
@@ -304,6 +310,13 @@ class Order < ActiveRecord::Base
     # lock any optional adjustments (coupon promotions, etc.)
     adjustments.optional.each { |adjustment| adjustment.update_attribute("locked", true) }
     OrderMailer.confirm_email(self).deliver
+
+    self.state_events.create({
+      :previous_state => "cart",
+      :next_state     => "complete",
+      :name           => "order" ,
+      :user_id        => (User.respond_to?(:current) && User.current.try(:id)) || self.user_id
+    })
   end
 
 
@@ -315,18 +328,14 @@ class Order < ActiveRecord::Base
   end
 
   def rate_hash
-    begin
-      @rate_hash ||= available_shipping_methods(:front_end).collect do |ship_method|
-        { :id => ship_method.id,
-          :shipping_method => ship_method,
-          :name => ship_method.name,
-          :cost => ship_method.calculator.compute(self)
-        }
-      end.sort_by{|r| r[:cost]}
-    rescue Spree::ShippingError => ship_error
-      flash[:error] = ship_error.to_s
-      []
-    end
+    @rate_hash ||= available_shipping_methods(:front_end).collect do |ship_method|
+      next unless cost = ship_method.calculator.compute(self)
+      { :id => ship_method.id,
+        :shipping_method => ship_method,
+        :name => ship_method.name,
+        :cost => cost
+      }
+    end.compact.sort_by{|r| r[:cost]}
   end
 
   def payment
@@ -353,41 +362,13 @@ class Order < ActiveRecord::Base
     bill_address.try(:lastname)
   end
 
-
-
+  def products
+    line_items.map{|li| li.variant.product}
+  end
 
   private
-  # def complete_order
-  #   self.adjustments.each(&:update_amount)
-  #   update_attribute(:completed_at, Time.now)
-  #
-  #   begin
-  #     @out_of_stock_items = InventoryUnit.sell_units(self)
-  #     update_totals unless @out_of_stock_items.empty?
-  #     shipment.inventory_units = inventory_units
-  #     save!
-  #   rescue Exception => e
-  #     logger.error "Problem saving authorized order: #{e.message}"
-  #     logger.error self.to_yaml
-  #   end
-  # end
-  #
-  # def restock_inventory
-  #   inventory_units.each do |inventory_unit|
-  #     inventory_unit.restock! if inventory_unit.can_restock?
-  #   end
-  #
-  #   inventory_units.reload
-  # end
-  #
-  # def update_line_items
-  #   to_wipe = self.line_items.select {|li| 0 == li.quantity || li.quantity.nil? }
-  #   LineItem.destroy(to_wipe)
-  #   self.line_items -= to_wipe      # important: remove defunct items, avoid a reload
-  # end
-
   def create_user
-    self.email = user.email if self.user and user.email !~ /example.com/
+    self.email = user.email if self.user and not user.anonymous?
     self.user ||= User.anonymous!
   end
 
@@ -416,6 +397,16 @@ class Order < ActiveRecord::Base
       "partial"
     end
     self.shipment_state = "backorder" if backordered?
+
+    if old_shipment_state = self.changed_attributes["shipment_state"]
+      self.state_events.create({
+        :previous_state => old_shipment_state,
+        :next_state     => self.shipment_state,
+        :name           => "shipment" ,
+        :user_id        => (User.respond_to?(:current) && User.current && User.current.id) || self.user_id
+      })
+    end
+
   end
 
   # Updates the +payment_state+ attribute according to the following logic:
@@ -434,6 +425,15 @@ class Order < ActiveRecord::Base
       self.payment_state = "credit_owed"
     else
       self.payment_state = "paid"
+    end
+
+    if old_payment_state = self.changed_attributes["payment_state"]
+      self.state_events.create({
+        :previous_state => old_payment_state,
+        :next_state     => self.payment_state,
+        :name           => "payment" ,
+        :user_id        =>  (User.respond_to?(:current) && User.current && User.current.id) || self.user_id
+      })
     end
   end
 
@@ -464,6 +464,12 @@ class Order < ActiveRecord::Base
   # Determine if email is required (we don't want validation errors before we hit the checkout)
   def require_email
     return true unless new_record? or state == 'cart'
+  end
+
+  def has_available_shipment
+    return unless :address == state_name.to_sym
+    return unless ship_address && ship_address.valid?
+    errors.add(:base, :no_shipping_methods_available) if available_shipping_methods.empty?
   end
 
   def after_cancel

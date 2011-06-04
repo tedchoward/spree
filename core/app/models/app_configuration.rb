@@ -1,9 +1,8 @@
 class AppConfiguration < Configuration
 
   preference :site_name, :string, :default => 'Spree Demo Site'
+  preference :default_seo_title, :string, :default => ''
   preference :site_url, :string, :default => 'demo.spreecommerce.com'
-  preference :store_cc, :boolean, :default => false
-  preference :store_cvv, :boolean, :default => false
   preference :default_locale, :string, :default => 'en'
   preference :allow_locale_switching, :boolean, :default => true
   preference :default_country_id, :integer, :default => 214
@@ -14,6 +13,7 @@ class AppConfiguration < Configuration
   preference :show_descendents, :boolean, :default => true
   preference :show_zero_stock_products, :boolean, :default => true
   preference :orders_per_page, :integer, :default => 15
+  preference :show_only_complete_orders_by_default, :boolean, :default => false
   preference :admin_products_per_page, :integer, :default => 10
   preference :admin_pgroup_preview_size, :integer, :default => 10
   preference :products_per_page, :integer, :default => 10
@@ -23,7 +23,6 @@ class AppConfiguration < Configuration
   preference :allow_ssl_in_production, :boolean, :default => true
   preference :allow_ssl_in_development_and_test, :boolean, :default => false
   preference :allow_guest_checkout, :boolean, :default => true
-  preference :allow_anonymous_checkout, :boolean, :default => false
   preference :alternative_billing_phone,  :boolean, :default => false # Request extra phone for bill addr
   preference :alternative_shipping_phone, :boolean, :default => false # Request extra phone for ship addr
   preference :shipping_instructions,      :boolean, :default => false # Request instructions/info for shipping
@@ -35,6 +34,7 @@ class AppConfiguration < Configuration
   preference :cache_static_content, :boolean, :default => true
   preference :use_content_controller, :boolean, :default => true
   preference :allow_checkout_on_gateway_error, :boolean, :default => false
+  preference :select_taxons_from_tree, :boolean, :default => false # provide opportunity to select taxons from tree instead of search with autocomplete
 
   validates :name, :presence => true, :uniqueness => true
 

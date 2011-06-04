@@ -1,5 +1,8 @@
 class User < ActiveRecord::Base
 
+  devise :database_authenticatable, :token_authenticatable, :registerable, :recoverable,
+         :rememberable, :trackable, :validatable, :encryptable, :encryptor => "authlogic_sha512"
+
   has_many :orders
   has_and_belongs_to_many :roles
   belongs_to :ship_address, :foreign_key => "ship_address_id", :class_name => "Address"
@@ -8,22 +11,11 @@ class User < ActiveRecord::Base
   before_save :check_admin
   before_validation :set_login
 
-  acts_as_authentic do |c|
-    c.transition_from_restful_authentication = true
-    c.maintain_sessions = false
-    #AuthLogic defaults
-    #c.validate_email_field = true
-    #c.validates_length_of_email_field_options = {:within => 6..100}
-    #c.validates_format_of_email_field_options = {:with => email_regex, :message => I18n.t(‘error_messages.email_invalid’, :default => “should look like an email address.”)}
-    #c.validate_password_field = true
-    #c.validates_length_of_password_field_options = {:minimum => 4, :if => :require_password?}
-    #for more defaults check the AuthLogic documentation
-  end
-
   # Setup accessible (or protected) attributes for your model
-  attr_accessible :email, :password, :password_confirmation, :remember_me
+  attr_accessible :email, :password, :password_confirmation, :remember_me, :persistence_token
 
-  alias_attribute :token, :persistence_token
+  scope :admin, lambda { includes(:roles).where("roles.name" => "admin") }
+  scope :registered, where("users.email NOT LIKE ?", "%@example.net")
 
   # has_role? simply needs to return true or false whether a user has a role or not.
   def has_role?(role_in_question)
@@ -35,16 +27,25 @@ class User < ActiveRecord::Base
   # when adding to the "cart" (which is really an order) and before the customer has a chance to provide an email or to register.
   def self.anonymous!
     token = User.generate_token(:persistence_token)
-    User.create(:email => "#{token}@example.com", :password => token, :password_confirmation => token)
+    User.create(:email => "#{token}@example.net", :password => token, :password_confirmation => token, :persistence_token => token)
   end
 
   def self.admin_created?
-    Role.where(:name => "admin").includes(:users).count > 0
+    User.admin.count > 0
+  end
+
+  def anonymous?
+    email =~ /@example.net$/
   end
 
   def deliver_password_reset_instructions!
     reset_perishable_token!
     UserMailer.password_reset_instructions(self).deliver
+  end
+
+  protected
+  def password_required?
+    !persisted? || password.present? || password_confirmation.present?
   end
 
   private
@@ -71,6 +72,14 @@ class User < ActiveRecord::Base
       token = friendly_token
       break token unless find(:first, :conditions => { column => token })
     end
+  end
+
+  def self.current
+    Thread.current[:user]
+  end
+
+  def self.current=(user)
+    Thread.current[:user] = user
   end
 
 end

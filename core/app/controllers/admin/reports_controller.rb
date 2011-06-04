@@ -1,12 +1,14 @@
 class Admin::ReportsController < Admin::BaseController
   before_filter :load_data
+  respond_to :html
 
   AVAILABLE_REPORTS = {
-    :sales_total => {:name => "Sales Total", :description => "Sales Total For All Orders"}
+    :sales_total => {:name => I18n.t(:sales_total), :description => I18n.t(:sales_total_description)}
   }
 
   def index
     @reports = AVAILABLE_REPORTS
+    respond_with(@reports)
   end
 
   def sales_total
@@ -19,22 +21,25 @@ class Admin::ReportsController < Admin::BaseController
     end
 
     if params[:search] && !params[:search][:created_at_less_than].blank?
-      params[:search][:created_at_less_than] = Time.zone.parse(params[:search][:created_at_less_than]).end_of_day rescue ""
+      params[:search][:created_at_less_than] =
+                                      Time.zone.parse(params[:search][:created_at_less_than]).end_of_day rescue ""
     end
 
-    params[:search][:completed_at_not_null] ||= "1"
-    if params[:search].delete(:completed_at_not_null) == "1"
-      params[:search][:completed_at_not_null] = true
+    if params[:search].delete(:completed_at_is_not_null) == "1"
+      params[:search][:completed_at_is_not_null] = true
+    else
+      params[:search][:completed_at_is_not_null] = false
     end
 
-    params[:search][:order] ||= "descend_by_created_at"
-    
-    @search = Order.searchlogic(params[:search])
-    @orders = @search.do_search
+    params[:search][:meta_sort] ||= "created_at.desc"
 
-    @item_total = @search.do_search.sum(:item_total)
-    @adjustment_total = @search.do_search.sum(:adjustment_total)
-    @sales_total = @search.do_search.sum(:total)
+    @search = Order.metasearch(params[:search])
+    @orders = @search
+    @item_total = @search.sum(:item_total)
+    @adjustment_total = @search.sum(:adjustment_total)
+    @sales_total = @search.sum(:total)
+
+    respond_with
   end
 
   private

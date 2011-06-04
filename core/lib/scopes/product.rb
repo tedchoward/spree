@@ -40,23 +40,51 @@ module Scopes::Product
     :descend_by_popularity,
   ]
 
+  ORDERING.each do |name|
+    next if %w(asecend_by_master_price descend_by_master_price).include?(name.to_s)
+    r = name.to_s.match(/(.*)_by_(.*)/)
+
+    order_text = "products.#{r[2]} "
+    order_text << ((r[1] == 'ascend') ?  "asc" : "desc")
+
+    Product.send(:scope, name.to_s, Product.send(:relation).order(order_text) )
+  end
+
+  ::Product.scope :ascend_by_master_price, Product.joins(:variants_with_only_master).order('variants.price asc')
+
+  ::Product.scope :descend_by_master_price, Product.joins(:variants_with_only_master).order('variants.price desc')
+
   ATTRIBUTE_HELPER_METHODS = {
     :with_ids => :product_picker_field
   }
 
-  #RAILS3 TODO - scopes are duplicated here and in model/product.rb - can we DRY it up?
-  # default product scope only lists available and non-deleted products
-  # ::Product.scope :not_deleted, lambda { where("products.deleted_at is null") }
-  # ::Product.scope :available,   lambda { |*args|
-  #    where("products.available_on <= ?", args.first || Time.zone.now)
-  # }
-  # ::Product.scope :active,      lambda { |*args|
-  #   Product.not_deleted.available(args.first).scope(:find)
-  # }
+  # Ryan Bates - http://railscasts.com/episodes/112
+  # general merging of conditions, names following the searchlogic pattern
+  ::Product.scope :conditions, lambda { |*args| {:conditions => args}}
 
-  ::Product.scope :price_between, lambda {|low,high|
+  # conditions_all is a more descriptively named enhancement of the above
+  ::Product.scope :conditions_all, lambda { |*args| {:conditions => [args].flatten}}
+
+  # forming the disjunction of a list of conditions (as strings)
+  ::Product.scope :conditions_any, lambda { |*args|
+    args = [args].flatten
+    raise "non-strings in conditions_any" unless args.all? {|s| s.is_a? String}
+    {:conditions => args.map {|c| "(#{c})"}.join(" OR ")}
+  }
+
+
+  ::Product.scope :price_between, lambda { |low, high|
     { :joins => :master, :conditions => ["variants.price BETWEEN ? AND ?", low, high] }
   }
+
+  ::Product.scope :master_price_lte, lambda { |price|
+    { :joins => :master, :conditions => ["variants.price <= ?", price] }
+  }
+
+  ::Product.scope :master_price_gte, lambda { |price|
+    { :joins => :master, :conditions => ["variants.price >= ?", price] }
+  }
+
 
   # This scope selects products in taxon AND all its descendants
   # If you need products only within one taxon use
@@ -161,11 +189,11 @@ module Scopes::Product
   Product.scope :in_name, lambda{|words|
     Product.like_any([:name], prepare_words(words))
   }
-  
+
   Product.scope :in_name_or_keywords, lambda{|words|
     Product.like_any([:name, :meta_keywords], prepare_words(words))
   }
-  
+
   Product.scope :in_name_or_description, lambda{|words|
     Product.like_any([:name, :description, :meta_description, :meta_keywords], prepare_words(words))
   }
@@ -181,9 +209,9 @@ module Scopes::Product
   # there is alternative faster and more elegant solution, it has small drawback though,
   # it doesn stack with other scopes :/
   #
-  Product.scope :descend_by_popularity, lambda{
-    # :joins => "LEFT OUTER JOIN (SELECT line_items.variant_id as vid, COUNT(*) as cnt FROM line_items GROUP BY line_items.variant_id) AS popularity_count ON variants.id = vid",
-    # :order => 'COALESCE(cnt, 0) DESC'
+  # :joins => "LEFT OUTER JOIN (SELECT line_items.variant_id as vid, COUNT(*) as cnt FROM line_items GROUP BY line_items.variant_id) AS popularity_count ON variants.id = vid",
+  # :order => 'COALESCE(cnt, 0) DESC'
+  Product.scope :descend_by_popularity,
     {
       :joins => :master,
       :order => <<SQL
@@ -201,10 +229,11 @@ module Scopes::Product
          ), 0) DESC
 SQL
     }
-  }
 
-  # Produce an array of keywords for use in scopes. Always return array with at least an empty string to avoid SQL errors
+  # Produce an array of keywords for use in scopes.
+  # Always return array with at least an empty string to avoid SQL errors
   def self.prepare_words(words)
+    return [''] if words.blank?
     a = words.split(/[,\s]/).map(&:strip)
     a.any? ? a : ['']
   end

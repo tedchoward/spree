@@ -5,6 +5,9 @@ class CheckoutController < Spree::BaseController
   ssl_required
 
   before_filter :load_order
+  rescue_from Spree::GatewayError, :with => :rescue_from_spree_gateway_error
+
+  respond_to :html
 
   # Updates the order and advances to the next state (when possible.)
   def update
@@ -13,19 +16,19 @@ class CheckoutController < Spree::BaseController
         state_callback(:after)
       else
         flash[:error] = I18n.t(:payment_processing_failed)
-        redirect_to checkout_state_path(@order.state) and return
+        respond_with(@order, :location => checkout_state_path(@order.state))
+        return
       end
 
-      if @order.state == "complete" or @order.completed?
+      if @order.state == "complete" || @order.completed?
         flash[:notice] = I18n.t(:order_processed_successfully)
         flash[:commerce_tracking] = "nothing special"
-        redirect_to completion_route
+        respond_with(@order, :location => completion_route)
       else
-        redirect_to checkout_state_path(@order.state)
+        respond_with(@order, :location => checkout_state_path(@order.state))
       end
-
     else
-      render :edit
+      respond_with(@order) { |format| format.html { render :edit } }
     end
   end
 
@@ -63,11 +66,12 @@ class CheckoutController < Spree::BaseController
   end
 
   def before_address
-    @order.bill_address ||= Address.new(:country => default_country)
-    @order.ship_address ||= Address.new(:country => default_country)
+    @order.bill_address ||= Address.default
+    @order.ship_address ||= Address.default
   end
 
   def before_delivery
+    return if params[:order].present?
     @order.shipping_method ||= (@order.rate_hash.first && @order.rate_hash.first[:shipping_method])
   end
 
@@ -79,8 +83,9 @@ class CheckoutController < Spree::BaseController
     session[:order_id] = nil
   end
 
-  def default_country
-    Country.find Spree::Config[:default_country_id]
+  def rescue_from_spree_gateway_error
+    flash[:error] = t('spree_gateway_error_flash_for_checkout')
+    render :edit
   end
 
 end

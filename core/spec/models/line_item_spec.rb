@@ -1,6 +1,11 @@
-require 'spec_helper'
+require File.dirname(__FILE__) + '/../spec_helper'
 
 describe LineItem do
+
+  context 'validation' do
+    it { should have_valid_factory(:line_item) }
+  end
+
   let(:variant) { mock_model(Variant, :count_on_hand => 95, :price => 9.99) }
   let(:line_item) { line_item = LineItem.new(:quantity => 5) }
   let(:order) { mock_model(Order, :line_items => [line_item], :inventory_units => [], :shipments => mock('shipments'), :completed? => true, :update! => true) }
@@ -87,5 +92,28 @@ describe LineItem do
       end
 
     end
+
+
+    context "with inventory units" do
+      let(:inventory_unit) { mock_model(LineItem, :variant_id => variant.id, :shipped? => false) }
+      before do
+        order.stub(:inventory_units => [inventory_unit])
+        line_item.stub(:order => order, :variant_id => variant.id)
+      end
+
+      it "should allow destroy when no units have shipped" do
+        line_item.should_receive(:remove_inventory)
+        line_item.destroy.should be_true
+      end
+
+      it "should not allow destroy when units have shipped" do
+        inventory_unit.stub(:shipped? => true)
+        line_item.should_not_receive(:remove_inventory)
+        line_item.destroy.should be_false
+      end
+
+    end
+
+
   end
 end

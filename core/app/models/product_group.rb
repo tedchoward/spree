@@ -24,10 +24,10 @@
 # without retriving all records.
 #
 # ProductGroup operates on named scopes defined for product in Scopes::Product,
-# or generated automatically by Searchlogic
+# or generated automatically by meta_search
 #
 class ProductGroup < ActiveRecord::Base
-  validates :name, :presence => true
+  validates :name, :presence => true # TODO ensure that this field is defined as not_null
   validates_associated :product_scopes
 
   before_save :set_permalink
@@ -36,7 +36,7 @@ class ProductGroup < ActiveRecord::Base
   has_and_belongs_to_many :cached_products, :class_name => "Product"
   # name
   has_many :product_scopes
-  accepts_nested_attributes_for :product_scopes 
+  accepts_nested_attributes_for :product_scopes
 
   # Testing utility: creates new *ProductGroup* from search permalink url.
   # Follows conventions for accessing PGs from URLs, as decoded in routes
@@ -58,7 +58,7 @@ class ProductGroup < ActiveRecord::Base
     end
     taxon = taxons && taxons.split("/").last
     pg.add_scope("in_taxon", taxon) if taxon
-    
+
     pg
   end
 
@@ -75,7 +75,7 @@ class ProductGroup < ActiveRecord::Base
   def from_route(attrs)
     self.order_scope = attrs.pop if attrs.length % 2 == 1
     attrs.each_slice(2) do |scope|
-      next unless Product.condition?(scope.first)
+      next unless Product.respond_to?(scope.first)
       add_scope(scope.first, scope.last.split(","))
     end
     self
@@ -85,7 +85,7 @@ class ProductGroup < ActiveRecord::Base
     search_hash.each_pair do |scope_name, scope_attribute|
       add_scope(scope_name, scope_attribute)
     end
-    
+
     self
   end
 
@@ -102,15 +102,14 @@ class ProductGroup < ActiveRecord::Base
     # from first nested_scope so we have to apply ordering FIRST.
     # see #2253 on rails LH
     base_product_scope = scopish
-    if use_order && !self.order_scope.blank? && Product.condition?(self.order_scope)
+    if use_order && !self.order_scope.blank? && Product.respond_to?(self.order_scope.intern)
       base_product_scope = base_product_scope.send(self.order_scope)
     end
 
-    return self.product_scopes.reject {|s|
-             s.is_ordering?
-           }.inject(base_product_scope){|result, scope|
-             scope.apply_on(result)
-           }
+    return self.product_scopes.reject {|s| s.is_ordering? }.inject(base_product_scope) do |result, scope|
+      scope.apply_on(result)
+    end
+
   end
 
   # returns chain of named scopes generated from order scope and product scopes.
@@ -127,9 +126,9 @@ class ProductGroup < ActiveRecord::Base
     elsif !use_order
       cached_group
     else
-      product_scopes.select {|s| 
+      product_scopes.select {|s|
         s.is_ordering?
-      }.inject(cached_group) {|res,order| 
+      }.inject(cached_group) {|res,order|
         order.apply_on(res)
       }
     end
@@ -156,7 +155,7 @@ class ProductGroup < ActiveRecord::Base
         [ps.name, ps.arguments.join(",")]
       }.flatten.join('/')
       result+= self.order_scope if self.order_scope
-    
+
       result
     else
       name.to_url
@@ -166,7 +165,7 @@ class ProductGroup < ActiveRecord::Base
   def set_permalink
     self.permalink = self.name.to_url
   end
-  
+
   def update_memberships
     # wipe everything directly to avoid expensive in-rails sorting
     ActiveRecord::Base.connection.execute "DELETE FROM product_groups_products WHERE product_group_id = #{self.id}"
@@ -185,17 +184,22 @@ class ProductGroup < ActiveRecord::Base
     "<ProductGroup" + (id && "[#{id}]").to_s + ":'#{to_url}'>"
   end
   
+  def to_param
+    self.permalink
+  end
+
   def order_scope
     if scope = product_scopes.detect {|s| s.is_ordering?}
       scope.name
     end
   end
+
   def order_scope=(scope_name)
     if scope = product_scopes.detect {|s| s.is_ordering?}
       scope.update_attribute(:name, scope_name)
     else
       self.product_scopes.build(:name => scope_name, :arguments => [])
-    end    
+    end
   end
 
   # Build a new product group with a scope to filter by specified products

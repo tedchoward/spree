@@ -8,10 +8,6 @@ Rails.application.routes.draw do
 
   resources :tax_categories
 
-  resources :countries, :only => :index do
-    resources :states
-  end
-
   resources :states, :only => :index
 
   # non-restful checkout stuff
@@ -49,7 +45,7 @@ Rails.application.routes.draw do
   end
 
   #   # Search routes
-  match 's/:product_group_query' => 'products#index', :as => :simple_search
+  match 's/*product_group_query' => 'products#index', :as => :simple_search
   match '/pg/:product_group_name' => 'products#index', :as => :pg_search
   match '/t/*id/s/*product_group_query' => 'taxons#show', :as => :taxons_search
   match 't/*id/pg/:product_group_name' => 'taxons#show', :as => :taxons_pg_search
@@ -72,14 +68,22 @@ Rails.application.routes.draw do
     end
     resources :states
     resources :tax_categories
-    resources :configurations
+    resources :configurations, :only => :index
     resources :products do
       resources :product_properties
-      resources :images
+      resources :images do
+        collection do
+          post :update_positions
+        end
+      end
       member do
         get :clone
       end
-      resources :variants
+      resources :variants do
+        collection do
+          post :update_positions
+        end
+      end
       resources :option_types do
         member do
           get :select
@@ -92,16 +96,22 @@ Rails.application.routes.draw do
       end
       resources :taxons do
         member do
-          post :select
-          post :remove
+          get :select
+          delete :remove
         end
         collection do
           post :available
+          post :batch_select
           get  :selected
         end
       end
     end
-    resources :option_types
+    resources :option_types do
+      collection do
+        post :update_positions
+      end
+    end
+    
     resources :properties do
       collection do
         get :filtered
@@ -181,6 +191,8 @@ Rails.application.routes.draw do
     resources :mail_methods
   end
 
+  match '/admin' => 'admin/orders#index', :as => :admin
+
   match '/content/cvv' => 'content#cvv'
 
   #RAILS3 TODO - we should disable this by default
@@ -188,6 +200,6 @@ Rails.application.routes.draw do
 
   # a catchall route for "static" content (except paths with explicit extensions: .html, .ico, etc)
   #if Spree::Config.instance && Spree::Config.get(:use_content_controller)
-    match '/*path' => 'content#show', :constraints => { :fullpath => /^\/([^.]+)$/ }
+    match '/*path' => 'content#show'
   #end
 end

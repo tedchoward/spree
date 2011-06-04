@@ -1,9 +1,14 @@
-require 'spec_helper'
+require File.dirname(__FILE__) + '/../spec_helper'
 
 class Gateway::Test < Gateway
 end
 
 describe PaymentMethod do
+
+  context 'validation' do
+    it { should have_valid_factory(:payment_method) }
+  end
+
   describe "self#register" do
     it "should increase all#size by 1" do
       expect {
@@ -15,7 +20,8 @@ describe PaymentMethod do
   describe "#available" do
     before(:all) do
       [nil, 'both', 'front_end', 'back_end'].each do |display_on|
-        Fabricate(:payment_method, :type => 'Gateway::Test', :name => 'Display Both', :display_on => display_on)
+        PaymentMethod.create(:type => 'Gateway::Test', :name => 'Display Both', :display_on => display_on,
+           :active => true, :environment => 'test', :description => 'foofah')
       end
       PaymentMethod.all.size.should == 4
     end

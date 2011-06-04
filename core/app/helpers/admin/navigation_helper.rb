@@ -39,42 +39,64 @@ module Admin::NavigationHelper
     link_to_with_icon('add', t("new"), edit_object_url(resource))
   end
 
-  def link_to_edit(resource)
-    link_to_with_icon('edit', t("edit"), edit_object_url(resource))
+  def link_to_edit(resource, options={})
+    link_to_with_icon('edit', t("edit"), edit_object_url(resource), options)
   end
 
-  def link_to_clone(resource)
-    link_to_with_icon('exclamation', t("clone"), clone_admin_product_url(resource))
+  def link_to_edit_url(url, options={})
+    link_to_with_icon('edit', t("edit"), url, options)
   end
 
-  def link_to_delete(resource, options = {})
-    options.assert_valid_keys(:url, :caption, :title, :dataType, :success)
+  def link_to_clone(resource, options={})
+    link_to_with_icon('exclamation', t("clone"), clone_admin_product_url(resource), options)
+  end
+
+  def link_to_delete(resource, options = {}, html_options={})
+    options.assert_valid_keys(:url, :caption, :title, :dataType, :success, :name)
 
     options.reverse_merge! :url => object_url(resource) unless options.key? :url
     options.reverse_merge! :caption => t('are_you_sure')
     options.reverse_merge! :title => t('confirm_delete')
     options.reverse_merge! :dataType => 'script'
     options.reverse_merge! :success => "function(r){ jQuery('##{dom_id resource}').fadeOut('hide'); }"
+    options.reverse_merge! :name => icon("delete") + ' ' + t("delete")
 
-    #link_to_with_icon('delete', t("delete"), object_url(resource), :confirm => t('are_you_sure'), :method => :delete )
-    link_to_function icon("delete") + ' ' + t("delete"), "jConfirm('#{options[:caption]}', '#{options[:title]}', function(r) {
-      if(r){
-        jQuery.ajax({
-          type: 'POST',
-          url: '#{options[:url]}',
-          data: ({_method: 'delete', authenticity_token: AUTH_TOKEN}),
-          dataType:'#{options[:dataType]}',
-          success: #{options[:success]}
-        });
-      }
-    });"
+    link_to_function_delete(options, html_options)
+    #link_to_function_delete_native(options, html_options)
+  end
+
+  # this function does not use jConfirm
+  def link_to_function_delete_native(options, html_options)
+    fn = %Q{
+      var answer = confirm("are you sure?");
+      if (!!answer) { #{link_to_function_delete_ajax(options)} };
+    }
+    link_to_function options[:name], fn, html_options
+  end
+
+  def link_to_function_delete(options, html_options)
+    link_to_function options[:name], "jConfirm('#{options[:caption]}', '#{options[:title]}', function(r) {
+      if(r){ #{link_to_function_delete_ajax(options)} }
+    });", html_options
+  end
+
+  def link_to_function_delete_ajax(options)
+    %Q{
+      jQuery.ajax({
+        type: 'POST',
+        url: '#{options[:url]}',
+        data: ({_method: 'delete', authenticity_token: AUTH_TOKEN}),
+        dataType:'#{options[:dataType]}',
+        success: #{options[:success]}
+      });
+    }
   end
 
   def link_to_with_icon(icon_name, text, url, options = {})
     options[:class] = (options[:class].to_s + " icon_link").strip
     link_to(icon(icon_name) + ' ' + text, url, options)
   end
-  
+
   def icon(icon_name)
     icon_name ? image_tag("/images/admin/icons/#{icon_name}.png") : ''
   end
@@ -84,8 +106,8 @@ module Admin::NavigationHelper
   end
 
   def button_link_to(text, url, html_options = {})
-    if (html_options[:method] && 
-        html_options[:method].to_s.downcase != 'get' && 
+    if (html_options[:method] &&
+        html_options[:method].to_s.downcase != 'get' &&
         !html_options[:remote])
       form_tag(url, :method => html_options[:method]) do
         button(text, html_options[:icon])

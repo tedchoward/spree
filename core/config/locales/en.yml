@@ -25,9 +25,9 @@ en:
         address2: "Address (contd.)"
         city: City
         country: "Country"
-        first_name: "First Name"
+        firstname: "First Name"
         first_name_begins_with: "First Name Begins With"
-        last_name: "Last Name"
+        lastname: "Last Name"
         last_name_begins_with: "Last Name Begins With"
         phone: Phone
         state: "State"
@@ -68,6 +68,8 @@ en:
         quantity: Quantity
       order:
         checkout_complete: "Checkout Complete"
+        completed_at: "Completed At"
+        coupon_code: "Coupon Code"
         ip_address: "IP Address"
         item_total: "Item Total"
         number: Number
@@ -333,6 +335,7 @@ en:
   debit: Debit
   default: Default
   delete: Delete
+  delivery: Delivery
   depth: Depth
   description: Description
   destroy: Destroy
@@ -368,9 +371,17 @@ en:
   enable_login_via_openid: "Use OpenID instead"
   enable_mail_delivery: Enable Mail Delivery
   enter_exactly_as_shown_on_card: Please enter exactly as shown on the card
+  enter_atleast_five_letters: Enter atleast five letters of customer name
   enter_password_to_confirm: "(we need your current password to confirm your changes)"
   environment: "Environment"
   error: error
+  errors:
+    messages:
+      could_not_create_taxon: "Could not create taxon"
+      no_shipping_methods_available: "No shipping methods available for selected location, please change your address and try again."
+  errors_prohibited_this_record_from_being_saved:
+    one: "1 error prohibited this record from being saved"
+    other: "%{count} errors prohibited this record from being saved"
   event: Event
   existing_customer: "Existing Customer"
   expiration: "Expiration"
@@ -391,22 +402,25 @@ en:
   flat_rate_per_order: "Flat Rate (per order)"
   flexible_rate: "Flexible Rate"
   forgot_password: "Forgot Password?"
+  from_state: From State
   front_end: Front End
   full_name: "Full Name"
   gateway: Gateway
   gateway_configuration: "Gateway configuration"
+  gateway_config_unavailable: "Gateway unavailable for environment"
   gateway_error: "Gateway Error"
   gateway_setting_description: "Select a payment gateway and configure its settings."
   gateway_settings_warning: "If you are changing the gateway type, you must save first before you can edit the gateway settings"
   general: "General"
   general_settings: "General Settings"
+  edit_general_settings: "Edit General Settings"
   general_settings_description: "Configure general Spree settings."
   google_analytics: "Google Analytics"
   google_analytics_active: "Active"
   google_analytics_create: "Create New Google Analytics Account"
   google_analytics_id: "Analytics ID"
   google_analytics_new: "New Google Analytics Account"
-  google_analytics_setting_description: "Manage Google Analytics ID"
+  google_analytics_setting_description: "Manage Google Analytics ID."
   guest_checkout: Guest Checkout
   guest_user_account: Checkout as a Guest
   has_no_shipped_units: has no shipped units
@@ -430,7 +444,7 @@ en:
   invalid_search: "Invalid search criteria."
   inventory: Inventory
   inventory_adjustment: "Inventory Adjustment"
-  inventory_setting_description: "Inventory Configuration, Backordering, Zero-Stock Display"
+  inventory_setting_description: "Inventory Configuration, Backordering, Zero-Stock Display."
   inventory_settings: "Inventory Settings"
   is_not_available_to_shipment_address: is not available to shipment address
   issue_number: Issue Number
@@ -522,7 +536,6 @@ en:
   no_payment_methods_available: "Can't check out, no payment methods are configured for this environment"
   no_products_found: "No products found"
   no_results: "No results"
-  no_shipping_methods_available: "No shipping methods available, please change your address and try again."
   no_user_found: "No user was found with that email address"
   none: None
   none_available: "None Available"
@@ -540,8 +553,9 @@ en:
     variant_not_deleted: "Variant could not be deleted"
   on_hand: "On Hand"
   operation: Operation
-  option_Values: "Option Values"
+  option_type: "Option Type"
   option_types: "Option Types"
+  option_value: "Option Value"
   option_values: "Option Values"
   options: Options
   or: or
@@ -552,6 +566,11 @@ en:
   order_date: "Order Date"
   order_details: "Order Details"
   order_email_resent: "Order Email Resent"
+  order_mailer:
+    confirm_email:
+      subject:  "Order Confirmation"
+    cancel_email:
+      subject: "Cancellation of Order"
   order_not_in_system: That order number is not valid on this site.
   order_number: Order
   order_operation_authorize: Authorize
@@ -568,7 +587,7 @@ en:
     confirm: confirm
     delivery: delivery
     payment: payment
-    resumed : resumed
+    resumed: resumed
     returned: returned
   order_summary: Order Summary
   order_sure_want_to: "Are you sure you want to %{event} this order?"
@@ -594,17 +613,24 @@ en:
   path: Path
   pay: pay
   payment: Payment
+  payment_actions: "Actions"
   payment_gateway: "Payment Gateway"
   payment_information: "Payment Information"
   payment_method: Payment Method
   payment_methods: Payment Methods
-  payment_methods_setting_description: Configure methods customers can use to pay
+  payment_methods_setting_description: Configure methods customers can use to pay.
   payment_processing_failed: "Payment could not be processed, please check the details you entered"
   payment_state: Payment State
   payment_states:
     balance_due: balance due
+    completed: completed
+    checkout: checkout
     credit_owed: credit owed
+    failed: failed
     paid: paid
+    pending: pending
+    processing: processing
+    void: void
   payment_updated: Payment Updated
   payments: Payments
   pending_payments: Pending Payments
@@ -796,9 +822,7 @@ en:
   roles: Roles
   sales_tax: "Sales Tax"
   sales_total: "Sales Total"
-  sales_total_for_all_orders: "Sales total for all orders"
-  sales_totals: "Sales Totals"
-  sales_totals_description: "Sales Total For All Orders"
+  sales_total_description: "Sales Total For All Orders"
   save_and_continue: Save and Continue
   save_preferences: Save Preferences
   scope: Scope
@@ -823,6 +847,9 @@ en:
   ship_address: "Ship Address"
   shipment: Shipment
   shipment_details: Shipment Details
+  shipment_mailer:
+    shipped_email:
+      subject: "Shipment Notification"
   shipment_number: "Shipment #"
   shipment_state: Shipment State
   shipment_states:
@@ -837,14 +864,14 @@ en:
   shipping: Shipping
   shipping_address: "Shipping Address"
   shipping_categories: "Shipping Categories"
-  shipping_categories_description: "Manage shipping categories to identify which products can be shipped via which method"
+  shipping_categories_description: "Manage shipping categories to identify which products can be shipped via which method."
   shipping_category: Shipping Category
   shipping_cost: Cost
   shipping_error: "Shipping Error"
   shipping_instructions: "Shipping Instructions"
   shipping_method: "Shipping Method"
   shipping_methods: "Shipping Methods"
-  shipping_methods_description: "Manage shipping methods"
+  shipping_methods_description: "Manage shipping methods."
   shipping_total: "Shipping Total"
   shop_by_taxonomy: "Shop by %{taxonomy}"
   shopping_cart: "Shopping Cart"
@@ -875,6 +902,7 @@ en:
   spree:
     date: Date
     time: Time
+  spree_gateway_error_flash_for_checkout: "There was a problem with your payment information. Please check your information and try again."
   ssl_will_be_used_in_development_and_test_modes: "SSL will be used in development and test mode if necessary."
   ssl_will_be_used_in_production_mode: "SSL will be used in production mode"
   ssl_will_not_be_used_in_development_and_test_modes: "SSL will not be used in development and test mode if necessary."
@@ -892,6 +920,9 @@ en:
   street_address_2: "Street Address (cont'd)"
   subtotal: Subtotal
   subtract: Subtract
+  successfully_created: "%{resource} has been successfully created!"
+  successfully_removed: "%{resource} has been successfully removed!"
+  successfully_updated: "%{resource} has been successfully updated!"
   system: System
   tax: Tax
   tax_categories: "Tax Categories"
@@ -906,7 +937,7 @@ en:
   taxon: Taxon
   taxon_edit: Edit Taxon
   taxonomies: Taxonomies
-  taxonomies_setting_description: "Create and manage taxonomies"
+  taxonomies_setting_description: "Create and manage taxonomies."
   taxonomy_edit: "Edit taxonomy"
   taxonomy_tree_error: "The requested change has not been accepted and the tree has been returned to its previous state, please try again."
   taxonomy_tree_instruction: "* Right click a child in the tree to access the menu for adding, deleting or sorting a child."
@@ -914,11 +945,13 @@ en:
   test: "Test"
   test_mode: Test Mode
   thank_you_for_your_order: "Thank you for your business.  Please print out a copy of this confirmation page for your records."
+  there_were_problems_with_the_following_fields: "There were problems with the following fields"
   this_file_language: "English (US)"
   this_month: "This Month"
   this_year: "This Year"
   thumbnail: "Thumbnail"
   to_add_variants_you_must_first_define: "To add variants, you must first define"
+  to_state: "To State"
   top_grossing_products: "Top Grossing Products"
   total: Total
   tracking: Tracking
@@ -971,6 +1004,7 @@ en:
   width: Width
   year: "Year"
   you_have_been_logged_out: "You have been logged out."
+  you_have_no_orders_yet: "You have no orders yet."
   your_cart_is_empty: "Your cart is empty"
   zip: Zip
   zone: Zone
